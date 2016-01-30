@@ -1,4 +1,4 @@
-var socket = new WebSocket("ws:/127.0.0.1:8765");
+var socket = new WebSocket("ws:/127.0.0.1:8765/ext");
 
 socket.onmessage = function(event) {
 	var self = this;
