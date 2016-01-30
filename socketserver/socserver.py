@@ -1,5 +1,6 @@
 import asyncio
 import websockets
+import json
 
 
 # input is the same for every socket
@@ -23,35 +24,56 @@ class MyExecutor(ThreadPoolExecutor):
 
 async def handler(websocket, path):
 	if path == "/ext":
+		global ext_socket
 		ext_socket = websocket
 		await handle_ext(websocket)
-	elif path == "/clt":
-		clt_socket = websocket
-		await handle_clt(websocket)
+	elif path == "/vk":
+		await handle_vk(websocket)
 
 
 async def handle_ext(websocket):
 	while True:
-		listener_task = asyncio.ensure_future(websocket.recv())
-		producer_task = asyncio.ensure_future(get_user_input())
+		if not websocket.open:
+			return
+		receiver_task = asyncio.ensure_future(websocket.recv())
+		user_input_task = asyncio.ensure_future(get_user_input())
+
 		done, pending = await asyncio.wait(
-			[listener_task, producer_task],
+			[user_input_task, receiver_task],
 			return_when=asyncio.FIRST_COMPLETED)
 
-		if listener_task in done:
-			pass
-		else:
-			listener_task.cancel()
+		for task in pending:
+			task.cancel()
 
-		if producer_task in done:
-			message = producer_task.result()
-			await websocket.send(message)
-		else:
-			producer_task.cancel()
+		if receiver_task in done:
+			if len(vk_connected) > 0:
+				await asyncio.wait([ws.send(receiver_task.result()) for ws in vk_connected])
+
+		if user_input_task in done:
+			try: 
+				message = user_input_task.result()
+				splitted_message = message.split(" ")
+				tab_index = int(splitted_message[0])
+				command = " ".join(splitted_message[1:])
+				request = {}
+				request["action"] = "input"
+				request["tab_index"] = tab_index
+				request["command"] = command
+				await websocket.send(json.dumps(request))
+			except:
+				pass
 
 
-async def handle_clt(websocket):
-	pass
+async def handle_vk(websocket):
+	global vk_connected
+	vk_connected.add(websocket)	
+	try:
+		while True:
+			message = await websocket.recv()
+			if ext_socket:
+				await ext_socket.send(message)
+	except:
+		vk_connected.remove(websocket)
 
 
 async def get_user_input():
@@ -59,11 +81,12 @@ async def get_user_input():
 	return command
 
 
+vk_connected = set()
 ext_socket = None
 clt_socket = None
 executor = MyExecutor()
 start_server = websockets.serve(handler, 'localhost', 8765)
 
-
+asyncio.get_event_loop().set_debug(True)
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()
