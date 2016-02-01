@@ -29,6 +29,23 @@ async def handler(websocket, path):
 		await handle_ext(websocket)
 	elif path == "/vk":
 		await handle_vk(websocket)
+	elif path == "/dist":
+		await handle_dist(websocket)
+
+
+async def handle_dist(websocket):
+	while True:
+		message = await websocket.recv()
+		splitted_message = message.split(" ")
+		tab_index = int(splitted_message[0])
+		command = " ".join(splitted_message[1:])
+		request = {}
+		request["action"] = "input"
+		request["tab_index"] = tab_index
+		request["command"] = command
+		print(json.dumps(request))
+		await ext_socket.send(json.dumps(request))
+		await websocket.send("Ты охуел что ли, что ты всякую хуйню тут пишешь?!")
 
 
 async def handle_ext(websocket):
@@ -51,6 +68,7 @@ async def handle_ext(websocket):
 
 		if user_input_task in done:
 			try: 
+				print('send user input')
 				message = user_input_task.result()
 				splitted_message = message.split(" ")
 				tab_index = int(splitted_message[0])
@@ -59,7 +77,7 @@ async def handle_ext(websocket):
 				request["action"] = "input"
 				request["tab_index"] = tab_index
 				request["command"] = command
-				await websocket.send(json.dumps(request))
+				await ext_socket.send(json.dumps(request))
 			except:
 				pass
 
@@ -70,6 +88,7 @@ async def handle_vk(websocket):
 	try:
 		while True:
 			message = await websocket.recv()
+			print(message)
 			if ext_socket:
 				await ext_socket.send(message)
 	except:
@@ -85,7 +104,7 @@ vk_connected = set()
 ext_socket = None
 clt_socket = None
 executor = MyExecutor()
-start_server = websockets.serve(handler, 'localhost', 8765)
+start_server = websockets.serve(handler, '0.0.0.0', 8765)
 
 asyncio.get_event_loop().set_debug(True)
 asyncio.get_event_loop().run_until_complete(start_server)
